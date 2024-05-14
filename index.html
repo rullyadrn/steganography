@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steganography</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        input[type="file"], textarea, button {
+            margin-bottom: 10px;
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #output {
+            margin-top: 20px;
+        }
+
+        .message {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .error {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .success {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Steganography</h1>
+        <input type="file" id="imageInput" accept="image/*">
+        <textarea id="secretMessage" placeholder="Enter your secret message"></textarea>
+        <button onclick="embedMessage()">Embed Message</button>
+        <button onclick="extractMessage()">Extract Message</button>
+        <br>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        function embedMessage() {
+            const input = document.getElementById('imageInput');
+            const message = document.getElementById('secretMessage').value;
+            const file = input.files[0];
+            if (!file || !message) {
+                showMessage("Please select an image and enter a message.", 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = function() {
+                const image = new Image();
+                image.src = this.result;
+                image.onload = function() {
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = image.width;
+                    canvas.height = image.height;
+                    ctx.drawImage(image, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const pixels = imageData.data;
+
+                    const binaryMessage = messageToBinary(message + "###"); // "###" marks the end of the message
+                    if (binaryMessage.length > pixels.length) {
+                        showMessage("Message is too long to be embedded in the selected image.", 'error');
+                        return;
+                    }
+
+                    for (let i = 0; i < binaryMessage.length; i++) {
+                        pixels[i * 4] = (pixels[i * 4] & 0xFE) | binaryMessage[i];
+                    }
+
+                    ctx.putImageData(imageData, 0, 0);
+                    const outputImage = canvas.toDataURL();
+                    showMessage("Message embedded successfully!", 'success', outputImage, message); // Display embedded message
+                };
+            };
+            reader.onerror = function() {
+                showMessage("Failed to read the file.", 'error');
+            };
+        }
+
+        function extractMessage() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const image = new Image();
+            image.onload = function() {
+                canvas.width = image.width;
+                canvas.height = image.height;
+                ctx.drawImage(image, 0, 0);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixels = imageData.data;
+                let binaryMessage = '';
+                for (let i = 0; i < pixels.length; i += 4) {
+                    binaryMessage += pixels[i] & 1;
+                    if (binaryMessage.endsWith("###")) {
+                        break;
+                    }
+                }
+                const message = binaryToMessage(binaryMessage.slice(0, -3));
+                showMessage("Message extracted successfully!", 'success', null, message);
+            };
+            const input = document.getElementById('imageInput');
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = function() {
+                image.src = this.result;
+            };
+            reader.onerror = function() {
+                showMessage("Failed to read the file.", 'error');
+            };
+        }
+
+        function showMessage(message, type, image, embeddedMessage) {
+            const output = document.getElementById('output');
+            output.innerHTML = `<div class="${type}">${message}</div>`;
+            if (image) {
+                output.innerHTML += `<img src="${image}" alt="Embedded Image">`;
+            }
+            if (embeddedMessage) {
+                output.innerHTML += `<div class="message">Embedded Message: ${embeddedMessage}</div>`;
+            }
+        }
+
+        function messageToBinary(message) {
+            return message.split('').map(char => {
+                const binary = char.charCodeAt(0).toString(2);
+                return '0'.repeat(8 - binary.length) + binary;
+            }).join('');
+        }
+
+        function binaryToMessage(binary) {
+            return binary.match(/.{1,8}/g).map(binary => String.fromCharCode(parseInt(binary, 2))).join('');
+        }
+    </script>
+</body>
+</html>
